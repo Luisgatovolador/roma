@@ -292,7 +292,7 @@ const ProductManagement = () => {
         }}
       >
         <Typography variant="h4" sx={{ fontWeight: "bold" }}>
-          Gestión De Productos 🍓
+          Gestión De Productos
         </Typography>
 
         <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>

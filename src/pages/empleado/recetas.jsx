@@ -127,7 +127,7 @@ const ConsultaRecetas = () => {
           </Paper>
         </Grid>
 
-        {/* 🍓 Columna Derecha: Detalle de la Receta */}
+        {/* Columna Derecha: Detalle de la Receta */}
         <Grid item xs={12} md={8}>
           {recetaSeleccionada ? (
             <Paper elevation={1} sx={{ p: 3, minHeight: 500 }}>

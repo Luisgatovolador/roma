@@ -9,18 +9,11 @@ import {
   Container,
   Grid,
   CircularProgress,
-  Alert,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField
+  Alert
 } from "@mui/material";
-import { Add, Edit, Delete } from "@mui/icons-material";
 import { productoService } from "../../services/productoService";
 
-const ProductoCard = ({ producto, onEditar, onEliminar }) => {
+const ProductoCard = ({ producto, onAgregarCarrito }) => {
   return (
     <Card
       elevation={0}
@@ -40,7 +33,7 @@ const ProductoCard = ({ producto, onEditar, onEliminar }) => {
         }
       }}
     >
-      {producto.precioVenta < (producto.precioRegular || producto.precioVenta * 1.2) && (
+      {producto.precioVenta < producto.precioRegular && (
         <Chip
           label="PROM"
           size="small"
@@ -104,39 +97,51 @@ const ProductoCard = ({ producto, onEditar, onEliminar }) => {
         <Typography variant="caption" display="block" color={producto.stock > 0 ? 'success.main' : 'error.main'}>
           {producto.stock > 0 ? `${producto.stock} disponibles` : 'Agotado'}
         </Typography>
-        <Typography variant="caption" display="block" color="text.secondary">
-          Categoría: {producto.categoria || 'Sin categoría'}
-        </Typography>
       </CardContent>
 
-      <Box display="flex" justifyContent="space-between" px={1} pb={1}>
-        <IconButton 
-          size="small" 
-          onClick={() => onEditar(producto)}
-          sx={{ color: 'primary.main' }}
+      <Box display="flex" justifyContent="flex-end" px={1} pb={1}>
+        <Button
+          variant="outlined"
+          size="small"
+          fullWidth
+          disabled={producto.stock === 0}
+          onClick={() => onAgregarCarrito(producto)}
+          sx={{
+            borderColor: "#fbe4e7",
+            color: "black",
+            backgroundColor: "#fff",
+            "&:hover": {
+              backgroundColor: "#f9d4da",
+              borderColor: "#fbe4e7",
+            },
+            "&:disabled": {
+              borderColor: '#ccc',
+              color: '#ccc'
+            }
+          }}
         >
-          <Edit />
-        </IconButton>
-        <IconButton 
-          size="small" 
-          onClick={() => onEliminar(producto._id)}
-          sx={{ color: 'error.main' }}
-        >
-          <Delete />
-        </IconButton>
+          {producto.stock > 0 ? 'Agregar' : 'Agotado'}
+        </Button>
       </Box>
     </Card>
   );
 };
 
-const CatalogoEmpleado = () => {
+const Catalogo = () => {
   const [productos, setProductos] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [categoriaActiva, setCategoriaActiva] = useState('Todas');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [openDialog, setOpenDialog] = useState(false);
-  const [productoEditando, setProductoEditando] = useState(null);
+
+  const [carrito, setCarrito] = useState(
+    JSON.parse(localStorage.getItem('carrito')) || []
+  );
+
+  useEffect(() => {
+    localStorage.setItem('carrito', JSON.stringify(carrito));
+  }, [carrito]);
+  
 
   useEffect(() => {
     cargarProductos();
@@ -146,17 +151,15 @@ const CatalogoEmpleado = () => {
     try {
       setLoading(true);
       const response = await productoService.getProductos();
+      setProductos(response.data);
+      console.log(response)
       
-      if (response.data) {
-        setProductos(response.data);
-        
-        // Extraer categorías únicas
-        const cats = ['Todas', ...new Set(response.data.map(p => p.categoria).filter(Boolean))];
-        setCategorias(cats);
-      }
+      // Extraer categorías únicas
+      const cats = ['Todas', ...new Set(response.data.map(p => p.categoria).filter(Boolean))];
+      setCategorias(cats);
     } catch (err) {
-      console.error('Error al cargar productos:', err);
-      setError('Error al cargar los productos: ' + (err.response?.data?.message || err.message));
+      setError('Error al cargar los productos');
+      console.error('Error:', err);
     } finally {
       setLoading(false);
     }
@@ -166,39 +169,33 @@ const CatalogoEmpleado = () => {
     ? productos 
     : productos.filter(p => p.categoria === categoriaActiva);
 
-  const handleEditarProducto = (producto) => {
-    setProductoEditando(producto);
-    setOpenDialog(true);
-  };
-
-  const handleEliminarProducto = async (id) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar este producto?')) {
-      try {
-        await productoService.deleteProducto(id);
-        cargarProductos(); // Recargar la lista
-        alert('Producto eliminado exitosamente');
-      } catch (error) {
-        alert('Error al eliminar producto: ' + (error.response?.data?.message || error.message));
-      }
-    }
-  };
-
-  const handleGuardarProducto = async (productoData) => {
-    try {
-      if (productoEditando) {
-        await productoService.updateProducto(productoEditando._id, productoData);
-        alert('Producto actualizado exitosamente');
+    const agregarAlCarrito = (producto) => {
+      const carritoActual = JSON.parse(localStorage.getItem('carrito')) || [];
+      
+      const productoExistente = carritoActual.find(item => item._id === producto._id);
+      
+      if (productoExistente) {
+        // Si ya existe, aumentar cantidad
+        const nuevoCarrito = carritoActual.map(item =>
+          item._id === producto._id 
+            ? { ...item, cantidad: item.cantidad + 1 }
+            : item
+        );
+        setCarrito(nuevoCarrito);
+        localStorage.setItem('carrito', JSON.stringify(nuevoCarrito));
       } else {
-        await productoService.createProducto(productoData);
-        alert('Producto creado exitosamente');
+        // Si no existe, agregar nuevo producto
+        const nuevoProducto = {
+          ...producto,
+          cantidad: 1
+        };
+        const nuevoCarrito = [...carritoActual, nuevoProducto];
+        setCarrito(nuevoCarrito);
+        localStorage.setItem('carrito', JSON.stringify(nuevoCarrito));
       }
-      setOpenDialog(false);
-      setProductoEditando(null);
-      cargarProductos();
-    } catch (error) {
-      alert('Error al guardar producto: ' + (error.response?.data?.message || error.message));
-    }
-  };
+      
+      alert(`Agregado: ${producto.nombre}`);
+    };
 
   if (loading) {
     return (
@@ -221,30 +218,9 @@ const CatalogoEmpleado = () => {
     >
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       
-      {/* Header con título y botón agregar */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-        <Typography variant="h4" fontWeight="bold">
-          Catálogo de Productos
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => {
-            setProductoEditando(null);
-            setOpenDialog(true);
-          }}
-          sx={{
-            backgroundColor: "#e91e63",
-            "&:hover": { backgroundColor: "#c2185b" },
-          }}
-        >
-          Agregar Producto
-        </Button>
-      </Box>
-
       {/* Botones de Categorías */}
       <Box mb={4} display="flex" flexWrap="wrap" gap={2}>
-        {categorias.map((cat) => (
+        {categorias.map((cat, index) => (
           <Button
             key={cat}
             variant="text"
@@ -266,14 +242,15 @@ const CatalogoEmpleado = () => {
         ))}
       </Box>
 
+      
+
       {/* Grid de Productos */}
       <Grid container spacing={2}>
         {productosFiltrados.map((producto) => (
-          <Grid item xs={12} sm={6} md={4} lg={3} key={producto._id}>
+          <Grid item xs={12} sm={6} md={4} lg={3} xl={2} key={producto._id}>
             <ProductoCard 
               producto={producto} 
-              onEditar={handleEditarProducto}
-              onEliminar={handleEliminarProducto}
+              onAgregarCarrito={agregarAlCarrito}
             />
           </Grid>
         ))}
@@ -286,70 +263,8 @@ const CatalogoEmpleado = () => {
           </Typography>
         </Box>
       )}
-
-      {/* Dialog para agregar/editar producto */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {productoEditando ? 'Editar Producto' : 'Agregar Nuevo Producto'}
-        </DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Nombre"
-            fullWidth
-            variant="outlined"
-            defaultValue={productoEditando?.nombre || ''}
-          />
-          <TextField
-            margin="dense"
-            label="Descripción"
-            fullWidth
-            variant="outlined"
-            defaultValue={productoEditando?.descripcion || ''}
-          />
-          <TextField
-            margin="dense"
-            label="Categoría"
-            fullWidth
-            variant="outlined"
-            defaultValue={productoEditando?.categoria || ''}
-          />
-          <TextField
-            margin="dense"
-            label="Precio Venta"
-            type="number"
-            fullWidth
-            variant="outlined"
-            defaultValue={productoEditando?.precioVenta || ''}
-          />
-          <TextField
-            margin="dense"
-            label="Stock"
-            type="number"
-            fullWidth
-            variant="outlined"
-            defaultValue={productoEditando?.stock || ''}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>Cancelar</Button>
-          <Button 
-            onClick={() => handleGuardarProducto({
-              nombre: 'Nuevo Producto',
-              descripcion: 'Descripción del producto',
-              categoria: 'General',
-              precioVenta: 0,
-              stock: 0
-            })}
-            variant="contained"
-          >
-            Guardar
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Container>
   );
 };
 
-export default CatalogoEmpleado;
+export default Catalogo;
