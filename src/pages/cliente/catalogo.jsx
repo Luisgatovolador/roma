@@ -134,15 +134,6 @@ const Catalogo = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [carrito, setCarrito] = useState(
-    JSON.parse(localStorage.getItem('carrito')) || []
-  );
-
-  useEffect(() => {
-    localStorage.setItem('carrito', JSON.stringify(carrito));
-  }, [carrito]);
-  
-
   useEffect(() => {
     cargarProductos();
   }, []);
@@ -152,7 +143,7 @@ const Catalogo = () => {
       setLoading(true);
       const response = await productoService.getProductos();
       setProductos(response.data);
-      console.log(response)
+      console.log("Productos cargados:", response.data);
       
       // Extraer categorías únicas
       const cats = ['Todas', ...new Set(response.data.map(p => p.categoria).filter(Boolean))];
@@ -169,33 +160,44 @@ const Catalogo = () => {
     ? productos 
     : productos.filter(p => p.categoria === categoriaActiva);
 
-    const agregarAlCarrito = (producto) => {
-      const carritoActual = JSON.parse(localStorage.getItem('carrito')) || [];
-      
-      const productoExistente = carritoActual.find(item => item._id === producto._id);
-      
-      if (productoExistente) {
-        // Si ya existe, aumentar cantidad
-        const nuevoCarrito = carritoActual.map(item =>
-          item._id === producto._id 
-            ? { ...item, cantidad: item.cantidad + 1 }
-            : item
-        );
-        setCarrito(nuevoCarrito);
-        localStorage.setItem('carrito', JSON.stringify(nuevoCarrito));
-      } else {
-        // Si no existe, agregar nuevo producto
-        const nuevoProducto = {
-          ...producto,
-          cantidad: 1
-        };
-        const nuevoCarrito = [...carritoActual, nuevoProducto];
-        setCarrito(nuevoCarrito);
-        localStorage.setItem('carrito', JSON.stringify(nuevoCarrito));
-      }
-      
-      alert(`Agregado: ${producto.nombre}`);
-    };
+  const agregarAlCarrito = (producto) => {
+    console.log("Agregando producto al carrito:", producto);
+    
+    const carritoActual = JSON.parse(localStorage.getItem('carrito')) || [];
+    console.log("Carrito actual ANTES:", carritoActual);
+    
+    const productoExistente = carritoActual.find(item => item._id === producto._id);
+    
+    let nuevoCarrito;
+    
+    if (productoExistente) {
+      // Si ya existe, aumentar cantidad
+      nuevoCarrito = carritoActual.map(item =>
+        item._id === producto._id 
+          ? { ...item, cantidad: item.cantidad + 1 }
+          : item
+      );
+    } else {
+      // Si no existe, agregar nuevo producto
+      const nuevoProducto = {
+        ...producto,
+        cantidad: 1
+      };
+      nuevoCarrito = [...carritoActual, nuevoProducto];
+    }
+    
+    // Guardar directamente en localStorage
+    localStorage.setItem('carrito', JSON.stringify(nuevoCarrito));
+    
+    const carritoActualizado = JSON.parse(localStorage.getItem('carrito'));
+    console.log("Carrito actualizado DESPUÉS:", carritoActualizado);
+    
+    // Dispara un evento personalizado para notificar al componente Carrito
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('carritoActualizado'));
+    
+    alert(`Agregado: ${producto.nombre}`);
+  };
 
   if (loading) {
     return (
@@ -242,12 +244,10 @@ const Catalogo = () => {
         ))}
       </Box>
 
-      
-
-      {/* Grid de Productos */}
+      {/* Grid de Productos - SINTAXIS CORRECTA para MUI v2 */}
       <Grid container spacing={2}>
         {productosFiltrados.map((producto) => (
-          <Grid item xs={12} sm={6} md={4} lg={3} xl={2} key={producto._id}>
+          <Grid key={producto._id} xs={12} sm={6} md={4} lg={3} xl={2}>
             <ProductoCard 
               producto={producto} 
               onAgregarCarrito={agregarAlCarrito}

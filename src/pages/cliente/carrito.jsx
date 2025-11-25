@@ -17,7 +17,6 @@ import {
 } from "@mui/material";
 import DeleteIcon from '@mui/icons-material/Delete';
 import { ventaService } from "../../services/ventaService";
-import { productoService } from "../../services/productoService";
 import { authService } from "../../services/authService";
 
 const ProductoItem = ({ producto, onEliminar, onActualizarCantidad }) => (
@@ -98,17 +97,55 @@ const Carrito = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Cargar carrito desde localStorage al iniciar
-  useEffect(() => {
-    const carritoGuardado = localStorage.getItem('carrito');
-    if (carritoGuardado) {
-      setCarrito(JSON.parse(carritoGuardado));
+  // Función para cargar el carrito desde localStorage
+  const cargarCarrito = () => {
+    try {
+      const carritoGuardado = localStorage.getItem('carrito');
+      console.log("🛒 Carrito cargado desde localStorage:", carritoGuardado);
+      if (carritoGuardado) {
+        const carritoParseado = JSON.parse(carritoGuardado);
+        setCarrito(carritoParseado);
+      } else {
+        setCarrito([]);
+      }
+    } catch (error) {
+      console.error("Error al cargar carrito:", error);
+      setCarrito([]);
     }
+  };
+
+  // Cargar carrito al iniciar y escuchar eventos de actualización
+  useEffect(() => {
+    cargarCarrito();
+    
+    // Escuchar eventos de actualización del carrito
+    const handleCarritoActualizado = () => {
+      console.log("🔄 Evento de carrito actualizado recibido");
+      cargarCarrito();
+    };
+
+    const handleStorageChange = (e) => {
+      if (e.key === 'carrito') {
+        console.log("📦 Cambio en localStorage detectado");
+        cargarCarrito();
+      }
+    };
+
+    window.addEventListener('carritoActualizado', handleCarritoActualizado);
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('carritoActualizado', handleCarritoActualizado);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   // Guardar carrito en localStorage cuando cambie
   useEffect(() => {
-    localStorage.setItem('carrito', JSON.stringify(carrito));
+    if (carrito.length > 0) {
+      localStorage.setItem('carrito', JSON.stringify(carrito));
+      console.log("💾 Carrito guardado en localStorage:", carrito);
+    }
   }, [carrito]);
 
   const subtotal = carrito.reduce((sum, item) => sum + (item.precioVenta * item.cantidad), 0);
@@ -116,17 +153,21 @@ const Carrito = () => {
   const total = subtotal + costoEnvio;
 
   const eliminarProducto = (productoId) => {
-    setCarrito(carrito.filter(item => item._id !== productoId));
+    const nuevoCarrito = carrito.filter(item => item._id !== productoId);
+    setCarrito(nuevoCarrito);
+    localStorage.setItem('carrito', JSON.stringify(nuevoCarrito));
   };
 
   const actualizarCantidad = (productoId, nuevaCantidad) => {
     if (nuevaCantidad < 1) return;
     
-    setCarrito(carrito.map(item => 
+    const nuevoCarrito = carrito.map(item => 
       item._id === productoId 
         ? { ...item, cantidad: nuevaCantidad }
         : item
-    ));
+    );
+    setCarrito(nuevoCarrito);
+    localStorage.setItem('carrito', JSON.stringify(nuevoCarrito));
   };
 
   const procesarPago = async () => {
@@ -154,9 +195,11 @@ const Carrito = () => {
         })),
         total: total,
         cliente: usuario.id,
-        empleado: usuario.id, // En una app real, esto sería diferente
-        metodoPago: 'efectivo' // Por defecto
+        empleado: usuario.id,
+        metodoPago: 'efectivo'
       };
+
+      console.log("📦 Enviando datos de venta:", ventaData);
 
       const response = await ventaService.createVenta(ventaData);
       
@@ -183,10 +226,11 @@ const Carrito = () => {
       
       {error && <Alert severity="error" sx={{ mb: 2, mx: 3 }}>{error}</Alert>}
       
+      {/* Grid con sintaxis correcta para MUI v2 */}
       <Grid container spacing={3} sx={{ mx: { xs: 0, md: 'auto' } }}> 
         
         {/* Columna Izquierda: Carrito */}
-        <Grid item xs={12} md={4}>
+        <Grid xs={12} md={4}>
           <Card elevation={0} sx={{ height: '100%' }}>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
@@ -236,7 +280,7 @@ const Carrito = () => {
         </Grid>
 
         {/* Columna Central: Tipo de Entrega y Forma de Pago */}
-        <Grid item xs={12} md={4}>
+        <Grid xs={12} md={4}>
           <Card elevation={0} sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" mb={2}>
@@ -296,7 +340,7 @@ const Carrito = () => {
         </Grid>
 
         {/* Columna Derecha: Confirmación de Pedido */}
-        <Grid item xs={12} md={4}>
+        <Grid xs={12} md={4}>
           <Card elevation={0} sx={{ height: '100%' }}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" mb={2}>

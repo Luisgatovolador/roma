@@ -38,7 +38,7 @@ const menuItems = [
   { text: "Control de Usuarios", icon: <People />, path: "/admin/control-usuarios" },
   { text: "Menú y Recetas", icon: <RestaurantMenu />, path: "/admin/recetas" },
   { text: "Proveedores", icon: <LocalShipping />, path: "/admin/proveedores" },
-  { text: "Perfil", icon: <Person />, path: "/admin/perfil" },
+  { text: "Gestión De Productos", icon: <Person />, path: "/admin/perfil" },
 ];
 
 const AdminNavbar = ({ children }) => {

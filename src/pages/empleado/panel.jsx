@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     Box, 
     Typography, 
@@ -15,39 +15,13 @@ import {
     ListItemButton,
     ListItemText,
     Chip,
-    Button
+    Button,
+    CircularProgress,
+    Alert
 } from '@mui/material';
-import { CreditCard, Money, ReceiptLong, CheckCircle } from '@mui/icons-material';
+import { CreditCard, Money, ReceiptLong, CheckCircle, Refresh } from '@mui/icons-material';
 
-// --- Datos Simulados de Historial de Ventas ---
-const historialVentas = [
-    { 
-        id: 1001, 
-        fecha: '2025-10-30 14:30', 
-        total: 18.27, 
-        metodo: 'Efectivo', 
-        estado: 'Completada',
-        productos: [
-            { nombre: 'Fresa Fresca 1kg', precio: 12.50, cantidad: 1 },
-            { nombre: 'Manzana Gala pza', precio: 1.80, cantidad: 2 }
-        ],
-        subtotal: 16.10,
-        iva: 2.17
-    },
-    { 
-        id: 1002, 
-        fecha: '2025-10-30 10:15', 
-        total: 25.68, 
-        metodo: 'Tarjeta', 
-        estado: 'Completada',
-        productos: [
-            { nombre: 'Naranja Valencia 2kg', precio: 8.00, cantidad: 3 },
-            { nombre: 'Mango Ataulfo pza', precio: 3.20, cantidad: 0.5 }
-        ],
-        subtotal: 22.14,
-        iva: 3.54
-    },
-];
+const API_BASE = "http://localhost:4000";
 
 // --- Íconos según el método de pago ---
 const getMetodoIcon = (metodo) => {
@@ -62,31 +36,98 @@ const getMetodoIcon = (metodo) => {
 };
 
 const ConsultaVentas = () => {
-    const [ventaSeleccionada, setVentaSeleccionada] = useState(historialVentas[0] || null);
+    const [ventas, setVentas] = useState([]);
+    const [ventaSeleccionada, setVentaSeleccionada] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        cargarVentas();
+    }, []);
+
+    const cargarVentas = async () => {
+        try {
+            setLoading(true);
+            setError('');
+            const res = await fetch(`${API_BASE}/api/ventas`);
+            if (!res.ok) throw new Error("Error al cargar ventas");
+            const data = await res.json();
+            setVentas(data);
+            if (data.length > 0) {
+                setVentaSeleccionada(data[0]);
+            }
+        } catch (err) {
+            console.error('Error al cargar ventas:', err);
+            setError('Error al cargar las ventas: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const calcularSubtotal = (productos) => {
+        return productos?.reduce((sum, item) => sum + (item.subtotal || 0), 0) || 0;
+    };
+
+    const calcularIVA = (subtotal) => {
+        return subtotal * 0.16; // 16% de IVA
+    };
+
+    if (loading) {
+        return (
+            <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ p: 3, backgroundColor: 'white', borderRadius: 2, boxShadow: 3 }}>
-            <Typography variant="h4" fontWeight="bold" mb={1}>
-                Consulta de Ventas (Historial)
-            </Typography>
-            <Typography variant="h6" color="text.secondary" mb={3}>
-                Selecciona una venta para ver el detalle
-            </Typography>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                <Box>
+                    <Typography variant="h4" fontWeight="bold">
+                        Consulta de Ventas
+                    </Typography>
+                    <Typography variant="h6" color="text.secondary">
+                        Historial y detalle de ventas reales
+                    </Typography>
+                </Box>
+                <Button
+                    startIcon={<Refresh />}
+                    onClick={cargarVentas}
+                    variant="outlined"
+                >
+                    Actualizar
+                </Button>
+            </Box>
+
+            {error && (
+                <Alert 
+                    severity="error" 
+                    sx={{ mb: 2 }}
+                    action={
+                        <Button color="inherit" size="small" onClick={cargarVentas}>
+                            Reintentar
+                        </Button>
+                    }
+                >
+                    {error}
+                </Alert>
+            )}
 
             <Grid container spacing={3}>
                 {/* 🧾 Columna Izquierda: Lista de Ventas */}
                 <Grid item xs={12} md={4}>
                     <Paper elevation={1} sx={{ p: 1, minHeight: 500, backgroundColor: '#fdf3f5' }}>
                         <Typography variant="subtitle1" fontWeight="bold" p={1}>
-                            Ventas Recientes
+                            Ventas Recientes ({ventas.length})
                         </Typography>
                         <Divider sx={{ mb: 1 }} />
 
                         <List disablePadding>
-                            {historialVentas.map((venta) => (
+                            {ventas.map((venta) => (
                                 <ListItemButton
-                                    key={venta.id}
-                                    selected={ventaSeleccionada && venta.id === ventaSeleccionada.id}
+                                    key={venta._id}
+                                    selected={ventaSeleccionada && venta._id === ventaSeleccionada._id}
                                     onClick={() => setVentaSeleccionada(venta)}
                                     sx={{ 
                                         borderRadius: 1, 
@@ -98,18 +139,26 @@ const ConsultaVentas = () => {
                                     }}
                                 >
                                     <ListItemText 
-                                        primary={`Venta #${venta.id}`} 
-                                        secondary={`Total: $${venta.total.toFixed(2)} — ${venta.fecha.split(' ')[1]}`} 
+                                        primary={`Venta #${venta._id?.slice(-6).toUpperCase()}`} 
+                                        secondary={`Total: $${venta.total?.toFixed(2) || '0.00'} — ${new Date(venta.fecha).toLocaleTimeString()}`} 
                                     />
                                     <Chip 
-                                        label={venta.metodo} 
+                                        label={venta.metodoPago} 
                                         size="small"
-                                        icon={getMetodoIcon(venta.metodo)}
+                                        icon={getMetodoIcon(venta.metodoPago)}
                                         sx={{ backgroundColor: '#f7c0c9', color: 'black' }}
                                     />
                                 </ListItemButton>
                             ))}
                         </List>
+
+                        {ventas.length === 0 && (
+                            <Box textAlign="center" py={4}>
+                                <Typography variant="body2" color="text.secondary">
+                                    No hay ventas registradas
+                                </Typography>
+                            </Box>
+                        )}
                     </Paper>
                 </Grid>
 
@@ -126,10 +175,10 @@ const ConsultaVentas = () => {
                                 }}
                             >
                                 <Typography variant="h5" fontWeight="bold">
-                                    Detalle Venta #{ventaSeleccionada.id}
+                                    Detalle Venta #{ventaSeleccionada._id?.slice(-6).toUpperCase()}
                                 </Typography>
                                 <Chip 
-                                    label={ventaSeleccionada.estado} 
+                                    label={ventaSeleccionada.estado || 'Completada'} 
                                     icon={<CheckCircle />}
                                     color="success"
                                     size="medium"
@@ -153,13 +202,15 @@ const ConsultaVentas = () => {
                                                 </TableRow>
                                             </TableHead>
                                             <TableBody>
-                                                {ventaSeleccionada.productos.map((item, index) => (
+                                                {ventaSeleccionada.productos?.map((item, index) => (
                                                     <TableRow key={index}>
-                                                        <TableCell>{item.nombre}</TableCell>
+                                                        <TableCell>
+                                                            {item.producto?.nombre || 'Producto no disponible'}
+                                                        </TableCell>
                                                         <TableCell align="center">{item.cantidad}</TableCell>
-                                                        <TableCell align="right">${item.precio.toFixed(2)}</TableCell>
+                                                        <TableCell align="right">${item.precioUnitario?.toFixed(2) || '0.00'}</TableCell>
                                                         <TableCell align="right">
-                                                            ${(item.precio * item.cantidad).toFixed(2)}
+                                                            ${item.subtotal?.toFixed(2) || '0.00'}
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}
@@ -179,7 +230,9 @@ const ConsultaVentas = () => {
                                             <Typography variant="subtitle2" color="text.secondary">
                                                 Fecha y Hora:
                                             </Typography>
-                                            <Typography fontWeight="bold">{ventaSeleccionada.fecha}</Typography>
+                                            <Typography fontWeight="bold">
+                                                {new Date(ventaSeleccionada.fecha).toLocaleString()}
+                                            </Typography>
                                         </Box>
 
                                         <Box mb={2}>
@@ -187,7 +240,7 @@ const ConsultaVentas = () => {
                                                 Método de Pago:
                                             </Typography>
                                             <Typography fontWeight="bold" display="flex" alignItems="center" gap={1}>
-                                                {getMetodoIcon(ventaSeleccionada.metodo)} {ventaSeleccionada.metodo}
+                                                {getMetodoIcon(ventaSeleccionada.metodoPago)} {ventaSeleccionada.metodoPago}
                                             </Typography>
                                         </Box>
 
@@ -199,12 +252,16 @@ const ConsultaVentas = () => {
 
                                         <Box display="flex" justifyContent="space-between" mb={1}>
                                             <Typography>Subtotal:</Typography>
-                                            <Typography fontWeight="bold">${ventaSeleccionada.subtotal.toFixed(2)}</Typography>
+                                            <Typography fontWeight="bold">
+                                                ${calcularSubtotal(ventaSeleccionada.productos).toFixed(2)}
+                                            </Typography>
                                         </Box>
 
                                         <Box display="flex" justifyContent="space-between" mb={1}>
                                             <Typography>IVA (16%):</Typography>
-                                            <Typography fontWeight="bold">${ventaSeleccionada.iva.toFixed(2)}</Typography>
+                                            <Typography fontWeight="bold">
+                                                ${calcularIVA(calcularSubtotal(ventaSeleccionada.productos)).toFixed(2)}
+                                            </Typography>
                                         </Box>
 
                                         <Divider sx={{ my: 1 }} />
@@ -212,7 +269,7 @@ const ConsultaVentas = () => {
                                         <Box display="flex" justifyContent="space-between">
                                             <Typography variant="h6">TOTAL PAGADO:</Typography>
                                             <Typography variant="h6" fontWeight="bold" color="error.main">
-                                                ${ventaSeleccionada.total.toFixed(2)}
+                                                ${ventaSeleccionada.total?.toFixed(2) || '0.00'}
                                             </Typography>
                                         </Box>
                                     </Paper>
@@ -227,6 +284,7 @@ const ConsultaVentas = () => {
                                             fontWeight: 'bold',
                                             '&:hover': { borderColor: '#f9d4da', backgroundColor: '#fce4ec' }
                                         }}
+                                        onClick={() => window.print()}
                                     >
                                         Imprimir Recibo
                                     </Button>

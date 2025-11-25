@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -16,51 +16,12 @@ import {
   ListItemText,
   Chip,
   Button,
+  CircularProgress,
+  Alert
 } from "@mui/material";
-import { RestaurantMenu, AccessTime, CheckCircle } from "@mui/icons-material";
+import { RestaurantMenu, AccessTime, CheckCircle, Refresh } from "@mui/icons-material";
 
-// --- Datos Simulados de Recetas ---
-const recetas = [
-  {
-    id: 1,
-    nombre: "Ensalada de Frutas Fresisimo",
-    tiempo: "10 min",
-    dificultad: "Fácil",
-    ingredientes: [
-      { nombre: "Fresas frescas", cantidad: "200g" },
-      { nombre: "Manzana Gala", cantidad: "1 pieza" },
-      { nombre: "Plátano", cantidad: "1 pieza" },
-      { nombre: "Miel natural", cantidad: "2 cucharadas" },
-      { nombre: "Yogur natural", cantidad: "100 ml" },
-    ],
-    pasos: [
-      "Lava y corta todas las frutas en trozos medianos.",
-      "Coloca las frutas en un tazón grande.",
-      "Agrega la miel y el yogur natural sobre las frutas.",
-      "Mezcla suavemente con una cuchara.",
-      "Sirve fría y decora con hojas de menta.",
-    ],
-  },
-  {
-    id: 2,
-    nombre: "Smoothie de Mango y Yogur",
-    tiempo: "8 min",
-    dificultad: "Fácil",
-    ingredientes: [
-      { nombre: "Mango Ataulfo", cantidad: "1 pieza" },
-      { nombre: "Yogur natural", cantidad: "150 ml" },
-      { nombre: "Leche", cantidad: "50 ml" },
-      { nombre: "Miel", cantidad: "1 cucharada" },
-      { nombre: "Hielo", cantidad: "3 cubos" },
-    ],
-    pasos: [
-      "Pela y corta el mango en trozos pequeños.",
-      "Coloca todos los ingredientes en la licuadora.",
-      "Licúa durante 1 minuto hasta obtener una mezcla homogénea.",
-      "Sirve en un vaso y decora con trozos de mango encima.",
-    ],
-  },
-];
+const API_BASE = "http://localhost:4000";
 
 // --- Ícono según dificultad ---
 const getDificultadColor = (nivel) => {
@@ -77,31 +38,90 @@ const getDificultadColor = (nivel) => {
 };
 
 const ConsultaRecetas = () => {
-  const [recetaSeleccionada, setRecetaSeleccionada] = useState(recetas[0]);
+  const [recetas, setRecetas] = useState([]);
+  const [recetaSeleccionada, setRecetaSeleccionada] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    cargarRecetas();
+  }, []);
+
+  const cargarRecetas = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const res = await fetch(`${API_BASE}/api/recetas`);
+      if (!res.ok) throw new Error("Error al cargar recetas");
+      const data = await res.json();
+      setRecetas(data);
+      if (data.length > 0) {
+        setRecetaSeleccionada(data[0]);
+      }
+    } catch (err) {
+      console.error('Error al cargar recetas:', err);
+      setError('Error al cargar las recetas: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: 3, backgroundColor: "white", borderRadius: 2, boxShadow: 3 }}>
-      <Typography variant="h4" fontWeight="bold" mb={1}>
-        Recetario Fresisimo
-      </Typography>
-      <Typography variant="h6" color="text.secondary" mb={3}>
-        Selecciona una receta para ver sus ingredientes y pasos
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Box>
+          <Typography variant="h4" fontWeight="bold">
+            Recetario
+          </Typography>
+          <Typography variant="h6" color="text.secondary">
+            Gestión de recetas y preparaciones
+          </Typography>
+        </Box>
+        <Button
+          startIcon={<Refresh />}
+          onClick={cargarRecetas}
+          variant="outlined"
+        >
+          Actualizar
+        </Button>
+      </Box>
+
+      {error && (
+        <Alert 
+          severity="error" 
+          sx={{ mb: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={cargarRecetas}>
+              Reintentar
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      )}
 
       <Grid container spacing={3}>
         {/* 📋 Columna Izquierda: Lista de Recetas */}
         <Grid item xs={12} md={4}>
           <Paper elevation={1} sx={{ p: 1, minHeight: 500, backgroundColor: "#fdf3f5" }}>
             <Typography variant="subtitle1" fontWeight="bold" p={1}>
-              Recetas Disponibles
+              Recetas Disponibles ({recetas.length})
             </Typography>
             <Divider sx={{ mb: 1 }} />
 
             <List disablePadding>
               {recetas.map((receta) => (
                 <ListItemButton
-                  key={receta.id}
-                  selected={recetaSeleccionada && receta.id === recetaSeleccionada.id}
+                  key={receta._id}
+                  selected={recetaSeleccionada && receta._id === recetaSeleccionada._id}
                   onClick={() => setRecetaSeleccionada(receta)}
                   sx={{
                     borderRadius: 1,
@@ -114,16 +134,24 @@ const ConsultaRecetas = () => {
                 >
                   <ListItemText
                     primary={receta.nombre}
-                    secondary={`Tiempo: ${receta.tiempo}`}
+                    secondary={`Producto: ${receta.productoFinal?.nombre || 'No especificado'}`}
                   />
                   <Chip
-                    label={receta.dificultad}
+                    label={receta.dificultad || "Fácil"}
                     size="small"
-                    color={getDificultadColor(receta.dificultad)}
+                    color={getDificultadColor(receta.dificultad || "Fácil")}
                   />
                 </ListItemButton>
               ))}
             </List>
+
+            {recetas.length === 0 && (
+              <Box textAlign="center" py={4}>
+                <Typography variant="body2" color="text.secondary">
+                  No hay recetas registradas
+                </Typography>
+              </Box>
+            )}
           </Paper>
         </Grid>
 
@@ -143,8 +171,8 @@ const ConsultaRecetas = () => {
                   {recetaSeleccionada.nombre}
                 </Typography>
                 <Chip
-                  label={recetaSeleccionada.dificultad}
-                  color={getDificultadColor(recetaSeleccionada.dificultad)}
+                  label={recetaSeleccionada.dificultad || "Fácil"}
+                  color={getDificultadColor(recetaSeleccionada.dificultad || "Fácil")}
                   icon={<CheckCircle />}
                 />
               </Box>
@@ -161,28 +189,40 @@ const ConsultaRecetas = () => {
                     <Table size="small">
                       <TableHead sx={{ backgroundColor: "#fbe4e7" }}>
                         <TableRow>
-                          <TableCell sx={{ fontWeight: "bold" }}>Ingrediente</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>Materia Prima</TableCell>
                           <TableCell align="right" sx={{ fontWeight: "bold" }}>
                             Cantidad
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                            Unidad
                           </TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {recetaSeleccionada.ingredientes.map((ing, index) => (
+                        {recetaSeleccionada.ingredientes?.map((ing, index) => (
                           <TableRow key={index}>
-                            <TableCell>{ing.nombre}</TableCell>
+                            <TableCell>{ing.materiaPrima?.nombre || 'Materia prima no disponible'}</TableCell>
                             <TableCell align="right">{ing.cantidad}</TableCell>
+                            <TableCell align="right">{ing.unidadMedida || 'unidad'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </TableContainer>
+                  
+                  {(!recetaSeleccionada.ingredientes || recetaSeleccionada.ingredientes.length === 0) && (
+                    <Box textAlign="center" py={2}>
+                      <Typography variant="body2" color="text.secondary">
+                        No se han definido ingredientes para esta receta
+                      </Typography>
+                    </Box>
+                  )}
                 </Grid>
 
-                {/* 👨‍🍳 Pasos a seguir */}
+                {/* 👨‍🍳 Información Adicional */}
                 <Grid item xs={12} lg={6}>
                   <Typography variant="h6" mb={2}>
-                    Pasos a Seguir
+                    Información de la Receta
                   </Typography>
                   <Paper
                     sx={{
@@ -192,21 +232,53 @@ const ConsultaRecetas = () => {
                       minHeight: 300,
                     }}
                   >
-                    {recetaSeleccionada.pasos.map((paso, i) => (
-                      <Box key={i} display="flex" mb={1.5} alignItems="flex-start">
-                        <Chip
-                          label={i + 1}
-                          size="small"
-                          sx={{
-                            backgroundColor: "#f7c0c9",
-                            color: "black",
-                            mr: 1.5,
-                            minWidth: 24,
-                          }}
-                        />
-                        <Typography>{paso}</Typography>
-                      </Box>
-                    ))}
+                    <Box mb={2}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Producto Final:
+                      </Typography>
+                      <Typography fontWeight="medium">
+                        {recetaSeleccionada.productoFinal?.nombre || 'No especificado'}
+                      </Typography>
+                    </Box>
+
+                    <Box mb={2}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Costo Total:
+                      </Typography>
+                      <Typography fontWeight="medium">
+                        ${recetaSeleccionada.costoTotal?.toFixed(2) || '0.00'}
+                      </Typography>
+                    </Box>
+
+                    <Box mb={2}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Margen de Ganancia:
+                      </Typography>
+                      <Typography fontWeight="medium">
+                        {recetaSeleccionada.margenGanancia?.toFixed(2) || '0'}%
+                      </Typography>
+                    </Box>
+
+                    <Box mb={2}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Producción Diaria:
+                      </Typography>
+                      <Typography fontWeight="medium">
+                        {typeof recetaSeleccionada.produccionDiaria === 'object' 
+                          ? `${recetaSeleccionada.produccionDiaria.cantidad || 0} ${recetaSeleccionada.produccionDiaria.unidad || 'unidades'}`
+                          : recetaSeleccionada.produccionDiaria || 'No especificada'
+                        }
+                      </Typography>
+                    </Box>
+
+                    <Box>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Última Actualización:
+                      </Typography>
+                      <Typography variant="body2">
+                        {new Date(recetaSeleccionada.fechaActualizacion).toLocaleDateString()}
+                      </Typography>
+                    </Box>
                   </Paper>
                 </Grid>
               </Grid>
@@ -216,7 +288,7 @@ const ConsultaRecetas = () => {
               <Box display="flex" justifyContent="flex-end" alignItems="center" gap={2}>
                 <Chip
                   icon={<AccessTime />}
-                  label={`Tiempo total: ${recetaSeleccionada.tiempo}`}
+                  label={`Actualizado: ${new Date(recetaSeleccionada.fechaActualizacion).toLocaleDateString()}`}
                   color="secondary"
                   variant="outlined"
                 />
@@ -228,6 +300,7 @@ const ConsultaRecetas = () => {
                     fontWeight: "bold",
                     "&:hover": { borderColor: "#f9d4da", backgroundColor: "#fce4ec" },
                   }}
+                  onClick={() => window.print()}
                 >
                   Imprimir Receta
                 </Button>
