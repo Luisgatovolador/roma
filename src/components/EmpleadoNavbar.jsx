@@ -40,7 +40,6 @@ const menuItems = [
   { text: "Reportes", icon: <Assessment />, path: "/empleado/reportes" },
   { text: "Inventario", icon: <Inventory />, path: "/empleado/inventario" },
   { text: "Recetas", icon: <AutoStories />, path: "/empleado/recetas" },
-  { text: "Órdenes", icon: <Receipt />, path: "/empleado/ordenes" },
 ];
 
 const EmpleadoNavbar = ({ children }) => {

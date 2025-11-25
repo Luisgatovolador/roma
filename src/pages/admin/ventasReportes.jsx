@@ -23,10 +23,11 @@ import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import KitchenIcon from '@mui/icons-material/Kitchen';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { ventaService } from '../../services/ventaService';
-import { inventarioService } from '../../services/inventarioService';
+import { productoService } from '../../services/productoService';
 import { compraService } from '../../services/compraService';
 import { alertaService } from '../../services/alertaService';
-import { productoService } from '../../services/productoService';
+
+const API_BASE = "http://localhost:4000";
 
 const PRIMARY_COLOR = '#D7385E';
 const LIGHT_PINK = '#F7E7EB';
@@ -50,7 +51,7 @@ const SalesAnalyticsDashboard = () => {
       setLoading(true);
       setError('');
       
-      // Cargar ventas con manejo de errores
+      // Cargar ventas
       let ventasData = [];
       try {
         const ventasResponse = await ventaService.getVentas();
@@ -80,7 +81,12 @@ const SalesAnalyticsDashboard = () => {
       try {
         const productosResponse = await productoService.getProductos();
         productosData = productosResponse.data || [];
-        setStockData(productosData.slice(0, 5));
+        
+        // Productos con stock bajo (menos de 10 unidades)
+        const productosBajoStock = productosData
+          .filter(p => (p.stock || 0) < 10)
+          .slice(0, 5);
+        setStockData(productosBajoStock);
       } catch (err) {
         console.warn('⚠️  No se pudieron cargar los productos:', err.message);
         setStockData([]);
@@ -109,17 +115,27 @@ const SalesAnalyticsDashboard = () => {
         setAlertas([]);
       }
 
-      // Cargar top categorías
+      // Cargar top categorías desde productos vendidos
       try {
-        const categoriasResponse = await ventaService.getTopCategorias();
-        setTopCategorias(categoriasResponse.data || []);
+        const categoriasMap = {};
+        ventasData.forEach(venta => {
+          venta.productos?.forEach(item => {
+            if (item.producto?.categoria) {
+              const cat = item.producto.categoria;
+              categoriasMap[cat] = (categoriasMap[cat] || 0) + (item.cantidad || 0);
+            }
+          });
+        });
+
+        const categoriasArray = Object.entries(categoriasMap)
+          .map(([categoria, ventas]) => ({ categoria, ventas }))
+          .sort((a, b) => b.ventas - a.ventas)
+          .slice(0, 3);
+
+        setTopCategorias(categoriasArray);
       } catch (err) {
-        console.warn('⚠️  No se pudieron cargar las categorías:', err.message);
-        setTopCategorias([
-          { categoria: 'Panadería', ventas: 45 },
-          { categoria: 'Pastelería', ventas: 32 },
-          { categoria: 'Bebidas', ventas: 28 }
-        ]);
+        console.warn('⚠️  No se pudieron calcular las categorías:', err.message);
+        setTopCategorias([]);
       }
 
     } catch (err) {
@@ -203,12 +219,18 @@ const SalesAnalyticsDashboard = () => {
                 flexDirection: 'column'
               }}
             >
-              {topCategorias.map((cat, index) => (
-                <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', width: '80%', mb: 1 }}>
-                  <Typography>{cat.categoria}</Typography>
-                  <Typography fontWeight="bold">{cat.ventas} ventas</Typography>
-                </Box>
-              ))}
+              {topCategorias.length > 0 ? (
+                topCategorias.map((cat, index) => (
+                  <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', width: '80%', mb: 1 }}>
+                    <Typography>{cat.categoria}</Typography>
+                    <Typography fontWeight="bold">{cat.ventas} ventas</Typography>
+                  </Box>
+                ))
+              ) : (
+                <Typography variant="body2" color="textSecondary">
+                  No hay datos de categorías disponibles
+                </Typography>
+              )}
             </Box>
           </Paper>
         </Grid>
@@ -217,7 +239,7 @@ const SalesAnalyticsDashboard = () => {
         <Grid item xs={12} md={4}>
           <Paper elevation={0} sx={{ p: 2, border: '1px solid #e0e0e0', height: '100%' }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-              Stock De Inventario
+              Stock Bajo en Inventario
             </Typography>
             <Box
               sx={{
@@ -242,7 +264,7 @@ const SalesAnalyticsDashboard = () => {
                 ))
               ) : (
                 <Typography variant="body2" color="textSecondary">
-                  No hay productos en inventario
+                  No hay productos con stock bajo
                 </Typography>
               )}
             </Box>

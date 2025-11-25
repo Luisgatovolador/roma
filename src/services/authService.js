@@ -20,16 +20,16 @@ export const authService = {
   },
 
   logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('usuario'); 
+    localStorage.removeItem("token");
+    localStorage.removeItem("usuario"); // corregido
   },
 
   getCurrentUser: () => {
-    const usuario = localStorage.getItem('usuario');
-    return usuario ? JSON.parse(usuario) : null;
+    const usuario = localStorage.getItem("usuario");
+    return usuario ? JSON.parse(usuario) : null; // corregido
   },
 
   isAuthenticated: () => {
-    return !!localStorage.getItem('token');
+    return !!localStorage.getItem("token");
   }
 };

@@ -1,12 +1,24 @@
+// En src/services/inventarioService.js - REEMPLAZA TODO CON:
 import api from './api';
 
 export const inventarioService = {
-  getInventario: () => api.get('/inventario'),
-  getProducto: (id) => api.get(`/inventario/${id}`),
-  createProducto: (productoData) => api.post('/inventario', productoData),
-  updateProducto: (id, productoData) => api.put(`/inventario/${id}`, productoData),
-  deleteProducto: (id) => api.delete(`/inventario/${id}`),
-  buscarProducto: (query) => api.get(`/inventario/buscar?q=${query}`),
+  // Usar endpoints de productos para el inventario
+  getInventario: () => api.get('/productos'),
+  getProducto: (id) => api.get(`/productos/${id}`),
+  createProducto: (productoData) => api.post('/productos', productoData),
+  updateProducto: (id, productoData) => api.put(`/productos/${id}`, productoData),
+  deleteProducto: (id) => api.delete(`/productos/${id}`),
+  buscarProducto: (query) => {
+    // Implementar búsqueda simple - puedes mejorarlo después
+    return api.get('/productos').then(response => {
+      const productos = response.data;
+      const filtrados = productos.filter(p => 
+        p.nombre?.toLowerCase().includes(query.toLowerCase()) ||
+        p.categoria?.toLowerCase().includes(query.toLowerCase())
+      );
+      return { data: filtrados };
+    });
+  },
   
   // Para alertas de stock bajo
   getStockBajo: () => api.get('/alertas/generar/inventario')

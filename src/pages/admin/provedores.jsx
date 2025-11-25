@@ -18,6 +18,9 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  CircularProgress,
+  Alert,
+  Snackbar
 } from "@mui/material";
 import {
   Search,
@@ -28,38 +31,14 @@ import {
   Edit,
   Delete,
   Add,
+  Refresh
 } from "@mui/icons-material";
 
 import ModalCompararProveedores from "../../components/ModalCompararProveedores.jsx";
 import ModalCrearProveedor from "../../components/ModalCrearProveedor.jsx";
 import ModalOrdenCompra from "../../components/ModalOrdenCompra.jsx";
 
-// --- Datos simulados iniciales ---
-const mockProveedores = [
-  {
-    id: 1,
-    nombre: "Frutas del Valle",
-    contacto: "María López",
-    telefono: "555-1234",
-    email: "contacto@frutasvalle.com",
-    productos: [
-      { id_producto: 101, nombre: "Manzana", precio: 25, tiempoEntrega: 2 },
-      { id_producto: 102, nombre: "Plátano", precio: 18, tiempoEntrega: 1 },
-    ],
-  },
-  {
-    id: 2,
-    nombre: "Campo Verde",
-    contacto: "Pedro García",
-    telefono: "555-5678",
-    email: "ventas@campoverde.com",
-    productos: [
-      { id_producto: 101, nombre: "Manzana", precio: 23, tiempoEntrega: 3 },
-      { id_producto: 102, nombre: "Plátano", precio: 19, tiempoEntrega: 2 },
-      { id_producto: 103, nombre: "Pera", precio: 28, tiempoEntrega: 4 },
-    ],
-  },
-];
+const API_BASE = "http://localhost:4000";
 
 export default function Proveedores() {
   const [proveedores, setProveedores] = useState([]);
@@ -69,10 +48,29 @@ export default function Proveedores() {
   const [openModal, setOpenModal] = useState(false);
   const [openCrear, setOpenCrear] = useState(false);
   const [openOrden, setOpenOrden] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
   useEffect(() => {
-    setProveedores(mockProveedores);
+    cargarProveedores();
   }, []);
+
+  const cargarProveedores = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const res = await fetch(`${API_BASE}/api/proveedores`);
+      if (!res.ok) throw new Error("Error al cargar proveedores");
+      const data = await res.json();
+      setProveedores(data);
+    } catch (err) {
+      console.error('Error al cargar proveedores:', err);
+      setError('Error al cargar los proveedores: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // --- Seleccionar proveedor ---
   const handleSeleccionar = (id) => {
@@ -84,12 +82,12 @@ export default function Proveedores() {
   // --- Comparar dos proveedores ---
   const handleComparar = () => {
     if (seleccionados.length !== 2) {
-      alert("Selecciona exactamente dos proveedores para comparar.");
+      mostrarSnackbar("Selecciona exactamente dos proveedores para comparar.", "warning");
       return;
     }
 
     const [p1, p2] = seleccionados.map((id) =>
-      proveedores.find((p) => p.id === id)
+      proveedores.find((p) => p._id === id)
     );
 
     const comparacionData = compararProveedores(p1, p2);
@@ -99,111 +97,141 @@ export default function Proveedores() {
 
   const compararProveedores = (p1, p2) => {
     const resultados = [];
-    p1.productos.forEach((prod1) => {
-      const prod2 = p2.productos.find(
-        (item) => item.id_producto === prod1.id_producto
+    
+    // Comparar productos suministrados
+    p1.productosSuministrados?.forEach((prod1) => {
+      const prod2 = p2.productosSuministrados?.find(
+        (item) => item.materiaPrima?._id === prod1.materiaPrima?._id
       );
       if (prod2) {
-        const mejor =
-          prod1.precio < prod2.precio
-            ? p1.nombre
-            : prod1.precio > prod2.precio
-            ? p2.nombre
-            : "Empate";
+        const precioA = prod1.precioUnitario || prod1.costoCaja / (prod1.cantidadPorCaja || 1);
+        const precioB = prod2.precioUnitario || prod2.costoCaja / (prod2.cantidadPorCaja || 1);
+        
+        const mejor = precioA < precioB ? p1.nombre : precioA > precioB ? p2.nombre : "Empate";
+        
         resultados.push({
-          nombre: prod1.nombre,
-          precioA: prod1.precio,
-          precioB: prod2.precio,
-          tiempoA: prod1.tiempoEntrega,
-          tiempoB: prod2.tiempoEntrega,
+          nombre: prod1.materiaPrima?.nombre || 'Producto',
+          precioA: precioA.toFixed(2),
+          precioB: precioB.toFixed(2),
+          tiempoA: "2-3 días", // Valores por defecto
+          tiempoB: "2-3 días",
           mejor,
           proveedorA: p1.nombre,
           proveedorB: p2.nombre,
         });
       }
     });
+    
     return resultados;
   };
 
   // --- Agregar proveedor ---
-  const handleGuardarProveedor = (nuevoProveedor) => {
-    setProveedores([...proveedores, nuevoProveedor]);
-  };
+  const handleGuardarProveedor = async (nuevoProveedor) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/proveedores`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(nuevoProveedor)
+      });
 
-  // --- Editar proveedor ---
-  const handleEditarProveedor = (id) => {
-    const nombre = prompt("Nuevo nombre del proveedor:");
-    if (!nombre) return;
-    setProveedores(
-      proveedores.map((p) =>
-        p.id === id ? { ...p, nombre } : p
-      )
-    );
-  };
+      if (!res.ok) throw new Error("Error al crear proveedor");
 
-  // --- Eliminar proveedor ---
-  const handleEliminarProveedor = (id) => {
-    if (window.confirm("¿Deseas eliminar este proveedor?")) {
-      setProveedores(proveedores.filter((p) => p.id !== id));
+      const proveedorCreado = await res.json();
+      setProveedores([...proveedores, proveedorCreado]);
+      setOpenCrear(false);
+      mostrarSnackbar("Proveedor creado exitosamente", "success");
+    } catch (err) {
+      console.error('Error al crear proveedor:', err);
+      mostrarSnackbar("Error al crear el proveedor", "error");
     }
   };
 
-  // --- Agregar producto ---
-  const handleAgregarProducto = (id) => {
-    const nombre = prompt("Nombre del producto:");
-    const precio = parseFloat(prompt("Precio del producto:"));
-    const tiempoEntrega = parseInt(prompt("Tiempo de entrega (días):"));
+  // --- Editar proveedor ---
+  const handleEditarProveedor = async (id) => {
+    const nombre = prompt("Nuevo nombre del proveedor:");
+    if (!nombre) return;
 
-    if (!nombre || isNaN(precio)) return alert("Datos inválidos.");
+    try {
+      const res = await fetch(`${API_BASE}/api/proveedores/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nombre })
+      });
 
-    setProveedores(
-      proveedores.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              productos: [
-                ...p.productos,
-                {
-                  id_producto: Date.now(),
-                  nombre,
-                  precio,
-                  tiempoEntrega,
-                },
-              ],
-            }
-          : p
-      )
-    );
+      if (!res.ok) throw new Error("Error al actualizar proveedor");
+
+      setProveedores(proveedores.map((p) => p._id === id ? { ...p, nombre } : p));
+      mostrarSnackbar("Proveedor actualizado exitosamente", "success");
+    } catch (err) {
+      console.error('Error al actualizar proveedor:', err);
+      mostrarSnackbar("Error al actualizar el proveedor", "error");
+    }
   };
 
-  // --- Eliminar producto ---
-  const handleEliminarProducto = (idProveedor, idProducto) => {
-    setProveedores(
-      proveedores.map((p) =>
-        p.id === idProveedor
-          ? {
-              ...p,
-              productos: p.productos.filter(
-                (prod) => prod.id_producto !== idProducto
-              ),
-            }
-          : p
-      )
-    );
+  // --- Eliminar proveedor ---
+  const handleEliminarProveedor = async (id) => {
+    if (!window.confirm("¿Deseas eliminar este proveedor?")) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/proveedores/${id}`, {
+        method: "DELETE"
+      });
+
+      if (!res.ok) throw new Error("Error al eliminar proveedor");
+
+      setProveedores(proveedores.filter((p) => p._id !== id));
+      mostrarSnackbar("Proveedor eliminado exitosamente", "success");
+    } catch (err) {
+      console.error('Error al eliminar proveedor:', err);
+      mostrarSnackbar("Error al eliminar el proveedor", "error");
+    }
+  };
+
+  const mostrarSnackbar = (message, severity) => {
+    setSnackbar({ open: true, message, severity });
   };
 
   const proveedoresFiltrados = proveedores.filter((p) =>
-    p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    p.nombre?.toLowerCase().includes(busqueda.toLowerCase())
   );
+
+  if (loading) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: 3, backgroundColor: "white", borderRadius: 2, boxShadow: 3 }}>
-      <Typography variant="h4" fontWeight="bold" mb={1} color="#e91e63">
-        Administración de Proveedores
-      </Typography>
-      <Typography variant="h6" color="text.secondary" mb={3}>
-        Gestión, comparación y órdenes de compra
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Box>
+          <Typography variant="h4" fontWeight="bold" color="#e91e63">
+            Administración de Proveedores
+          </Typography>
+          <Typography variant="h6" color="text.secondary">
+            Gestión, comparación y órdenes de compra
+          </Typography>
+        </Box>
+        <Button
+          startIcon={<Refresh />}
+          onClick={cargarProveedores}
+          variant="outlined"
+        >
+          Actualizar
+        </Button>
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       {/* 🔍 Búsqueda y botones */}
       <Box
@@ -286,6 +314,7 @@ export default function Proveedores() {
             <TableRow>
               <TableCell sx={{ fontWeight: "bold" }}>Sel.</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Proveedor</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Contacto</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Productos</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Acciones</TableCell>
             </TableRow>
@@ -293,7 +322,7 @@ export default function Proveedores() {
           <TableBody>
             {proveedoresFiltrados.map((p) => (
               <TableRow
-                key={p.id}
+                key={p._id}
                 hover
                 sx={{
                   "&:hover": { backgroundColor: "#f8bbd0" },
@@ -301,21 +330,41 @@ export default function Proveedores() {
               >
                 <TableCell>
                   <Checkbox
-                    checked={seleccionados.includes(p.id)}
-                    onChange={() => handleSeleccionar(p.id)}
+                    checked={seleccionados.includes(p._id)}
+                    onChange={() => handleSeleccionar(p._id)}
                   />
                 </TableCell>
                 <TableCell>
                   <Box display="flex" alignItems="center" gap={1}>
                     <Store fontSize="small" color="action" />
-                    {p.nombre}
+                    <Box>
+                      <Typography variant="body2" fontWeight="medium">
+                        {p.nombre}
+                      </Typography>
+                      {p.marca && (
+                        <Typography variant="caption" color="text.secondary">
+                          {p.marca}
+                        </Typography>
+                      )}
+                    </Box>
                   </Box>
                 </TableCell>
                 <TableCell>
-                  {p.productos.map((prod) => (
+                  <Typography variant="body2">{p.contacto || p.nombre}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {p.telefono || 'Sin teléfono'}
+                  </Typography>
+                  {p.email && (
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      {p.email}
+                    </Typography>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {p.productosSuministrados?.map((prod, index) => (
                     <Chip
-                      key={prod.id_producto}
-                      label={`${prod.nombre} ($${prod.precio})`}
+                      key={index}
+                      label={`${prod.materiaPrima?.nombre || 'Producto'} ($${prod.precioUnitario?.toFixed(2) || '0.00'})`}
                       size="small"
                       variant="outlined"
                       sx={{
@@ -324,28 +373,18 @@ export default function Proveedores() {
                         backgroundColor: "white",
                         borderColor: "#e91e63",
                       }}
-                      onDelete={() =>
-                        handleEliminarProducto(p.id, prod.id_producto)
-                      }
                     />
                   ))}
-                  <Tooltip title="Agregar producto">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleAgregarProducto(p.id)}
-                      sx={{
-                        color: "#e91e63",
-                        "&:hover": { color: "#c2185b" },
-                      }}
-                    >
-                      <Add fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+                  {(!p.productosSuministrados || p.productosSuministrados.length === 0) && (
+                    <Typography variant="caption" color="text.secondary">
+                      Sin productos
+                    </Typography>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Tooltip title="Editar">
                     <IconButton
-                      onClick={() => handleEditarProveedor(p.id)}
+                      onClick={() => handleEditarProveedor(p._id)}
                       color="secondary"
                     >
                       <Edit />
@@ -353,7 +392,7 @@ export default function Proveedores() {
                   </Tooltip>
                   <Tooltip title="Eliminar">
                     <IconButton
-                      onClick={() => handleEliminarProveedor(p.id)}
+                      onClick={() => handleEliminarProveedor(p._id)}
                       color="error"
                     >
                       <Delete />
@@ -365,6 +404,14 @@ export default function Proveedores() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      {proveedoresFiltrados.length === 0 && (
+        <Box textAlign="center" py={4}>
+          <Typography variant="h6" color="text.secondary">
+            No se encontraron proveedores
+          </Typography>
+        </Box>
+      )}
 
       {/* 📊 Resumen */}
       <Divider sx={{ my: 3 }} />
@@ -383,23 +430,10 @@ export default function Proveedores() {
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2, textAlign: "center", backgroundColor: "#f3e5f5" }}>
             <Typography variant="h6" fontWeight="bold">
-              Con Productos en Común
+              Proveedores Activos
             </Typography>
             <Typography variant="h4" color="secondary.main">
-              {
-                proveedores.filter(
-                  (p) =>
-                    p.productos.filter((prod) =>
-                      proveedores.some(
-                        (otro) =>
-                          otro.id !== p.id &&
-                          otro.productos.some(
-                            (pp) => pp.id_producto === prod.id_producto
-                          )
-                      )
-                    ).length > 0
-                ).length
-              }
+              {proveedores.filter(p => p.activo !== false).length}
             </Typography>
           </Paper>
         </Grid>
@@ -432,6 +466,21 @@ export default function Proveedores() {
         onClose={() => setOpenOrden(false)}
         proveedores={proveedores}
       />
+
+      {/* Snackbar para notificaciones */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert 
+          severity={snackbar.severity} 
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
