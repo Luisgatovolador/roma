@@ -5,7 +5,7 @@ export const authService = {
     const response = await api.post('/auth/login', { email, password });
     if (response.data.success) {
       localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.usuario));
+      localStorage.setItem('usuario', JSON.stringify(response.data.usuario));
     }
     return response.data;
   },
@@ -14,18 +14,19 @@ export const authService = {
     const response = await api.post('/auth/register', userData);
     if (response.data.success) {
       localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.usuario));
+      localStorage.setItem('usuario', JSON.stringify(response.data.usuario));
     }
     return response.data;
   },
 
   logout: () => {
     localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localStorage.removeItem('usuario'); 
   },
 
   getCurrentUser: () => {
-    return JSON.parse(localStorage.getItem('user'));
+    const usuario = localStorage.getItem('usuario');
+    return usuario ? JSON.parse(usuario) : null;
   },
 
   isAuthenticated: () => {

@@ -1,4 +1,3 @@
-// services/ventaService.js
 import api from './api';
 
 export const ventaService = {
@@ -10,7 +9,6 @@ export const ventaService = {
       return response;
     } catch (error) {
       console.error("❌ Error en getVentas:", error);
-      // Si hay error 404, retornar array vacío para que no rompa la aplicación
       if (error.response?.status === 404) {
         console.log("⚠️  Endpoint no encontrado, retornando array vacío");
         return { data: [] };
@@ -18,20 +16,54 @@ export const ventaService = {
       throw error;
     }
   },
+
+  getVentasByCliente: async (clienteId) => {
+    try {
+      console.log(`🔄 Buscando ventas para cliente: ${clienteId}`);
+      const response = await api.get(`/ventas/cliente/${clienteId}`);
+      console.log("✅ Ventas del cliente:", response.data);
+      return response;
+    } catch (error) {
+      console.error("❌ Error en getVentasByCliente:", error);
+      // Si el endpoint no existe, retornar array vacío
+      if (error.response?.status === 404) {
+        console.log("⚠️  Endpoint de ventas por cliente no encontrado");
+        return { data: [] };
+      }
+      return { data: [] };
+    }
+  },
   
   getVentaById: async (id) => {
-    const response = await api.get(`/ventas/${id}`);
-    return response;
+    try {
+      const response = await api.get(`/ventas/${id}`);
+      return response;
+    } catch (error) {
+      console.error("❌ Error en getVentaById:", error);
+      throw error;
+    }
   },
   
   createVenta: async (ventaData) => {
-    const response = await api.post('/ventas', ventaData);
-    return response;
+    try {
+      console.log("🔄 Creando venta:", ventaData);
+      const response = await api.post('/ventas', ventaData);
+      console.log("✅ Venta creada:", response.data);
+      return response;
+    } catch (error) {
+      console.error("❌ Error en createVenta:", error);
+      throw error;
+    }
   },
   
   deleteVenta: async (id) => {
-    const response = await api.delete(`/ventas/${id}`);
-    return response;
+    try {
+      const response = await api.delete(`/ventas/${id}`);
+      return response;
+    } catch (error) {
+      console.error("❌ Error en deleteVenta:", error);
+      throw error;
+    }
   },
   
   getVentasHoy: async () => {
@@ -40,7 +72,6 @@ export const ventaService = {
       return response;
     } catch (error) {
       console.error("❌ Error en getVentasHoy:", error);
-      // Retornar datos por defecto si el endpoint no existe
       return { data: { total: 0, cantidad: 0 } };
     }
   },
@@ -51,7 +82,6 @@ export const ventaService = {
       return response;
     } catch (error) {
       console.error("❌ Error en getTopCategorias:", error);
-      // Retornar datos por defecto
       return { data: [
         { categoria: 'Panadería', ventas: 45 },
         { categoria: 'Pastelería', ventas: 32 },
@@ -67,17 +97,6 @@ export const ventaService = {
     } catch (error) {
       console.error("❌ Error en getVentasMensuales:", error);
       return { data: { total: 0 } };
-    }
-  },
-
-  // Método de prueba
-  testConnection: async () => {
-    try {
-      const response = await api.get('/ventas/test');
-      return response;
-    } catch (error) {
-      console.error("❌ Error en testConnection:", error);
-      throw error;
     }
   }
 };
