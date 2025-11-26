@@ -2,594 +2,402 @@ import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Divider,
   Grid,
-  Button,
-  TextField,
-  InputAdornment,
-  IconButton,
   Card,
   CardContent,
-  Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Alert,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  Button,
+  Divider,
+  Container,
+  IconButton,
   CircularProgress,
-  Snackbar
+  Alert,
 } from "@mui/material";
-import {
-  Search,
-  Add,
-  Remove,
-  Delete,
-  ShoppingCart,
-  CreditCard,
-  Money,
-  ReceiptLong,
-  Close
-} from "@mui/icons-material";
+import DeleteIcon from "@mui/icons-material/Delete";
+import { ventaService } from "../../services/ventaService";
+import { authService } from "../../services/authService";
+import TarjetaFisicaModal from "../../components/payments/TarjetaModal";
+import EfectivoModal from "../../components/payments/EfectivoModal";
 
-const API_BASE = "http://localhost:4000";
+const ProductoItem = ({ producto, onEliminar, onActualizarCantidad }) => (
+  <Box display="flex" justifyContent="space-between" alignItems="center" my={1.5}>
+    <Box display="flex" alignItems="center" sx={{ flex: 1 }}>
+      <Box
+        sx={{
+          width: 40,
+          height: 40,
+          backgroundColor: "#fbe4e7",
+          borderRadius: 1,
+          mr: 2,
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+        }}
+      >
+        {producto.imagen ? (
+          <img
+            src={`http://localhost:4000${producto.imagen}`}
+            alt={producto.nombre}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          <Typography variant="caption" color="text.secondary">
+            Img
+          </Typography>
+        )}
+      </Box>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography variant="body1" fontWeight="medium" noWrap>
+          {producto.nombre}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" noWrap>
+          {producto.categoria || "Sin categoría"}
+        </Typography>
+        <Box display="flex" alignItems="center" mt={0.5}>
+          <IconButton
+            size="small"
+            onClick={() =>
+              onActualizarCantidad(producto._id, producto.cantidad - 1)
+            }
+            disabled={producto.cantidad <= 1}
+          >
+            -
+          </IconButton>
+          <Typography variant="body2" sx={{ mx: 1 }}>
+            {producto.cantidad}
+          </Typography>
+          <IconButton
+            size="small"
+            onClick={() =>
+              onActualizarCantidad(producto._id, producto.cantidad + 1)
+            }
+            disabled={producto.cantidad >= producto.stock}
+          >
+            +
+          </IconButton>
+        </Box>
+      </Box>
+    </Box>
+    <Box display="flex" alignItems="center">
+      <Typography variant="body1" fontWeight="bold" sx={{ ml: 1, mr: 2 }}>
+        ${(producto.precioVenta * producto.cantidad).toFixed(2)}
+      </Typography>
+      <IconButton
+        size="small"
+        onClick={() => onEliminar(producto._id)}
+        sx={{ color: "error.main" }}
+      >
+        <DeleteIcon />
+      </IconButton>
+    </Box>
+  </Box>
+);
 
-const PuntoDeVenta = () => {
-  const [productos, setProductos] = useState([]);
+const Carrito = () => {
   const [carrito, setCarrito] = useState([]);
-  const [busqueda, setBusqueda] = useState("");
-  const [categoriaActiva, setCategoriaActiva] = useState("Todas");
-  const [metodoPago, setMetodoPago] = useState("Efectivo");
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [deliveryType, setDeliveryType] = useState("store");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [tarjetaModalOpen, setTarjetaModalOpen] = useState(false);
+  const [efectivoOpen, setEfectivoOpen] = useState(false);
+  const [metodoPago, setMetodoPago] = useState("tarjeta"); // Puede ser "tarjeta" o "efectivo"
 
-  // Cargar productos
+  // Cargar carrito desde localStorage
   useEffect(() => {
-    cargarProductos();
-    // Cargar carrito desde localStorage
-    const carritoGuardado = localStorage.getItem('carritoVentas');
-    if (carritoGuardado) {
-      setCarrito(JSON.parse(carritoGuardado));
-    }
+    const carritoGuardado = localStorage.getItem("carrito");
+    if (carritoGuardado) setCarrito(JSON.parse(carritoGuardado));
   }, []);
 
-  // Guardar carrito en localStorage
-  useEffect(() => {
-    localStorage.setItem('carritoVentas', JSON.stringify(carrito));
-  }, [carrito]);
-
-  const cargarProductos = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`${API_BASE}/api/productos`);
-      if (!res.ok) throw new Error("Error al cargar productos");
-      const data = await res.json();
-      setProductos(data);
-    } catch (err) {
-      console.error('Error al cargar productos:', err);
-      setError('Error al cargar productos: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Categorías únicas
-  const categorias = ['Todas', ...new Set(productos.map(p => p.categoria).filter(Boolean))];
-
-  // Filtrar productos
-  const productosFiltrados = productos.filter(p => {
-    const coincideBusqueda = p.nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
-                            p.categoria?.toLowerCase().includes(busqueda.toLowerCase());
-    const coincideCategoria = categoriaActiva === 'Todas' || p.categoria === categoriaActiva;
-    return coincideBusqueda && coincideCategoria;
-  });
-
-  // Funciones del carrito
   const agregarAlCarrito = (producto) => {
-    if (producto.stock === 0) {
-      mostrarSnackbar("Producto agotado", "warning");
-      return;
-    }
+    const carritoActual = JSON.parse(localStorage.getItem('carrito')) || [];
+    const productoExistente = carritoActual.find(item => item._id === producto._id);
 
-    const productoExistente = carrito.find(item => item._id === producto._id);
-    
+    let nuevoCarrito;
     if (productoExistente) {
-      if (productoExistente.cantidad >= producto.stock) {
-        mostrarSnackbar("No hay suficiente stock", "warning");
-        return;
-      }
-      setCarrito(carrito.map(item =>
-        item._id === producto._id 
-          ? { ...item, cantidad: item.cantidad + 1 }
-          : item
-      ));
-    } else {
-      setCarrito([...carrito, {
-        ...producto,
-        cantidad: 1
-      }]);
-    }
-    mostrarSnackbar(`Agregado: ${producto.nombre}`, "success");
-  };
-
-  const aumentarCantidad = (productoId) => {
-    const producto = carrito.find(item => item._id === productoId);
-    const productoStock = productos.find(p => p._id === productoId)?.stock || 0;
-    
-    if (producto.cantidad >= productoStock) {
-      mostrarSnackbar("No hay suficiente stock", "warning");
-      return;
-    }
-    
-    setCarrito(carrito.map(item =>
-      item._id === productoId 
-        ? { ...item, cantidad: item.cantidad + 1 }
-        : item
-    ));
-  };
-
-  const disminuirCantidad = (productoId) => {
-    setCarrito(carrito.map(item =>
-      item._id === productoId && item.cantidad > 1
-        ? { ...item, cantidad: item.cantidad - 1 }
-        : item
-    ));
-  };
-
-  const eliminarDelCarrito = (productoId) => {
-    setCarrito(carrito.filter(item => item._id !== productoId));
-  };
-
-  const vaciarCarrito = () => {
-    setCarrito([]);
-    mostrarSnackbar("Carrito vaciado", "info");
-  };
-
-  // Cálculos
-  const subtotal = carrito.reduce((sum, item) => sum + (item.precioVenta * item.cantidad), 0);
-  const total = subtotal;
-
-  // Procesar venta
-  const procesarVenta = async () => {
-    if (carrito.length === 0) {
-      mostrarSnackbar("El carrito está vacío", "warning");
-      return;
-    }
-
-    try {
-      const ventaData = {
-        productos: carrito.map(item => ({
-          producto: item._id,
-          cantidad: item.cantidad,
-          precioUnitario: item.precioVenta,
-          subtotal: item.precioVenta * item.cantidad
-        })),
-        total: total,
-        metodoPago: metodoPago,
-        estado: "pagado"
-      };
-
-      const res = await fetch(`${API_BASE}/api/ventas`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(ventaData)
-      });
-
-      if (!res.ok) throw new Error("Error al procesar la venta");
-
-      const ventaCreada = await res.json();
-      
-      // Actualizar stock de productos
-      await Promise.all(
-        carrito.map(item =>
-          fetch(`${API_BASE}/api/productos/${item._id}`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              stock: item.stock - item.cantidad
-            })
-          })
-        )
+      nuevoCarrito = carritoActual.map(item =>
+        item._id === producto._id ? { ...item, cantidad: item.cantidad + 1 } : item
       );
-
-      mostrarSnackbar(`Venta procesada exitosamente - Total: $${total.toFixed(2)}`, "success");
-      setCarrito([]);
-      setDialogOpen(false);
-      cargarProductos(); // Recargar productos para actualizar stock
-    } catch (err) {
-      console.error('Error al procesar venta:', err);
-      mostrarSnackbar("Error al procesar la venta", "error");
+    } else {
+      nuevoCarrito = [...carritoActual, { ...producto, cantidad: 1 }];
     }
+
+    localStorage.setItem('carrito', JSON.stringify(nuevoCarrito));
+    window.dispatchEvent(new Event('carritoActualizado'));
   };
 
-  const mostrarSnackbar = (message, severity) => {
-    setSnackbar({ open: true, message, severity });
+  const subtotal = carrito.reduce(
+    (sum, item) => sum + item.precioVenta * item.cantidad,
+    0
+  );
+  const costoEnvio = deliveryType === "home" ? 5.0 : 0;
+  const total = subtotal + costoEnvio;
+
+  const eliminarProducto = (productoId) => {
+    const nuevoCarrito = carrito.filter((item) => item._id !== productoId);
+    setCarrito(nuevoCarrito);
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
-        <CircularProgress />
-      </Box>
+  const actualizarCantidad = (productoId, nuevaCantidad) => {
+    if (nuevaCantidad < 1) return;
+    const nuevoCarrito = carrito.map((item) =>
+      item._id === productoId ? { ...item, cantidad: nuevaCantidad } : item
     );
-  }
+    setCarrito(nuevoCarrito);
+  };
+
+  // Pago con tarjeta física
+  const iniciarPagoTarjetaFisica = () => {
+    if (carrito.length === 0) {
+      setError("El carrito está vacío");
+      return;
+    }
+
+    const usuario = authService.getCurrentUser();
+    if (!usuario) {
+      setError("Debes iniciar sesión para continuar");
+      return;
+    }
+
+    const ventaData = {
+      productos: carrito.map((item) => ({
+        producto: item._id,
+        cantidad: item.cantidad,
+        precioUnitario: item.precioVenta,
+        subtotal: item.precioVenta * item.cantidad,
+      })),
+      total,
+      cliente: usuario.id,
+      empleado: usuario.id,
+      metodoPago: "tarjeta física",
+    };
+
+    setMetodoPago("tarjeta física");
+    setTarjetaModalOpen(true);
+    window.ventaTemporal = ventaData;
+  };
+
+  // Pago en efectivo
+  const iniciarPagoEfectivo = () => {
+    if (carrito.length === 0) {
+      setError("El carrito está vacío");
+      return;
+    }
+
+    const usuario = authService.getCurrentUser();
+    if (!usuario) {
+      setError("Debes iniciar sesión para continuar");
+      return;
+    }
+
+    const ventaData = {
+      productos: carrito.map((item) => ({
+        producto: item._id,
+        cantidad: item.cantidad,
+        precioUnitario: item.precioVenta,
+        subtotal: item.precioVenta * item.cantidad,
+      })),
+      total,
+      cliente: usuario.id,
+      empleado: usuario.id,
+      metodoPago: "efectivo",
+    };
+
+    setMetodoPago("efectivo");
+    setEfectivoOpen(true);
+    window.ventaTemporal = ventaData;
+  };
 
   return (
-    <Box sx={{ p: 3, backgroundColor: "white", borderRadius: 2, boxShadow: 3 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold">
-            Punto de Venta
-          </Typography>
-          <Typography variant="h6" color="text.secondary">
-            Sistema de ventas rápido y eficiente
-          </Typography>
-        </Box>
-        <Box display="flex" alignItems="center" gap={2}>
-          <Chip
-            icon={<ShoppingCart />}
-            label={`${carrito.length} productos`}
-            color="primary"
-            variant="outlined"
-          />
-          <Button
-            variant="contained"
-            startIcon={<ReceiptLong />}
-            onClick={() => setDialogOpen(true)}
-            disabled={carrito.length === 0}
-            sx={{
-              backgroundColor: "#e91e63",
-              "&:hover": { backgroundColor: "#c2185b" },
-            }}
-          >
-            Finalizar Venta (${total.toFixed(2)})
-          </Button>
-        </Box>
-      </Box>
+    <>
+      <Container
+        maxWidth={false}
+        sx={{ py: 4, backgroundColor: "#f1f1f1", minHeight: "100vh" }}
+      >
+        <Typography variant="h4" fontWeight="bold" gutterBottom sx={{ ml: 3 }}>
+          Pedido en Línea
+        </Typography>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, mx: 3 }}>
+            {error}
+          </Alert>
+        )}
 
-      <Grid container spacing={3}>
-        {/* Columna izquierda - Catálogo de productos */}
-        <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <TextField
-                placeholder="Buscar productos..."
-                variant="outlined"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                size="small"
-                sx={{ width: "60%" }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search color="action" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <Box display="flex" gap={1} flexWrap="wrap">
-                {categorias.map((cat) => (
-                  <Button
-                    key={cat}
-                    variant={cat === categoriaActiva ? "contained" : "outlined"}
-                    size="small"
-                    onClick={() => setCategoriaActiva(cat)}
-                    sx={{
-                      backgroundColor: cat === categoriaActiva ? "#fbe4e7" : "transparent",
-                      color: "black",
-                      borderColor: "#fbe4e7",
-                    }}
-                  >
-                    {cat}
-                  </Button>
-                ))}
-              </Box>
-            </Box>
-          </Paper>
-
-          {/* Grid de productos */}
-          <Grid container spacing={2}>
-            {productosFiltrados.map((producto) => (
-              <Grid item xs={12} sm={6} md={4} key={producto._id}>
-                <Card
-                  sx={{
-                    height: "100%",
-                    cursor: producto.stock > 0 ? "pointer" : "not-allowed",
-                    opacity: producto.stock > 0 ? 1 : 0.6,
-                    transition: "all 0.3s ease",
-                    "&:hover": producto.stock > 0 ? {
-                      transform: "translateY(-4px)",
-                      boxShadow: 3
-                    } : {}
-                  }}
-                  onClick={() => producto.stock > 0 && agregarAlCarrito(producto)}
-                >
-                  <CardContent sx={{ p: 2 }}>
-                    <Box
-                      sx={{
-                        height: 120,
-                        backgroundColor: "#f5f5f5",
-                        borderRadius: 1,
-                        mb: 1.5,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden'
-                      }}
-                    >
-                      {producto.imagen ? (
-                        <img 
-                          src={`${API_BASE}${producto.imagen}`} 
-                          alt={producto.nombre}
-                          style={{ 
-                            width: '100%', 
-                            height: '100%', 
-                            objectFit: 'cover' 
-                          }}
-                        />
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">
-                          Sin imagen
-                        </Typography>
-                      )}
-                    </Box>
-
-                    <Typography variant="body1" fontWeight="medium" noWrap>
-                      {producto.nombre}
+        <Grid container spacing={3} sx={{ mx: { xs: 0, md: "auto" } }}>
+          {/* Carrito */}
+          <Grid xs={12} md={4}>
+            <Card elevation={0} sx={{ height: "100%" }}>
+              <CardContent>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                  <Typography variant="h6" fontWeight="bold">
+                    Carrito ({carrito.length} productos)
+                  </Typography>
+                  <Typography variant="h6" fontWeight="bold">
+                    Subtotal
+                  </Typography>
+                </Box>
+                <Divider sx={{ mb: 1.5 }} />
+                <Box sx={{ maxHeight: "60vh", overflowY: "auto" }}>
+                  {carrito.length > 0 ? (
+                    carrito.map((producto) => (
+                      <ProductoItem
+                        key={producto._id}
+                        producto={producto}
+                        onEliminar={eliminarProducto}
+                        onActualizarCantidad={actualizarCantidad}
+                      />
+                    ))
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" textAlign="center" py={4}>
+                      El carrito está vacío
                     </Typography>
-                    <Typography variant="body2" color="text.primary" fontWeight="bold">
-                      ${producto.precioVenta?.toFixed(2)}
-                    </Typography>
-                    <Typography variant="caption" color={producto.stock > 0 ? 'success.main' : 'error.main'}>
-                      {producto.stock > 0 ? `${producto.stock} disponibles` : 'Agotado'}
-                    </Typography>
-                    {producto.stock > 0 && (
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        fullWidth
-                        sx={{ mt: 1 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          agregarAlCarrito(producto);
-                        }}
-                      >
-                        Agregar
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
+                  )}
+                </Box>
+              </CardContent>
+              <CardContent sx={{ pt: 0 }}>
+                <Box display="flex" justifyContent="space-between" mb={1}>
+                  <Typography variant="body2">Subtotal:</Typography>
+                  <Typography variant="body2">${subtotal.toFixed(2)}</Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between" mb={1}>
+                  <Typography variant="body2">Envío:</Typography>
+                  <Typography variant="body2">${costoEnvio.toFixed(2)}</Typography>
+                </Box>
+                <Divider sx={{ my: 1 }} />
+                <Box display="flex" justifyContent="space-between" mt={1} pt={1}>
+                  <Typography variant="h6">Total</Typography>
+                  <Typography variant="h6" fontWeight="bold">${total.toFixed(2)}</Typography>
+                </Box>
+              </CardContent>
+            </Card>
           </Grid>
 
-          {productosFiltrados.length === 0 && (
-            <Box textAlign="center" py={4}>
-              <Typography variant="h6" color="text.secondary">
-                No se encontraron productos
-              </Typography>
-            </Box>
-          )}
-        </Grid>
-
-        {/* Columna derecha - Carrito de compras */}
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2, position: "sticky", top: 20 }}>
-            <Typography variant="h6" fontWeight="bold" mb={2}>
-              Carrito de Venta
-            </Typography>
-
-            {carrito.length === 0 ? (
-              <Box textAlign="center" py={4}>
-                <Typography variant="body2" color="text.secondary">
-                  El carrito está vacío
+          {/* Tipo de Entrega y Forma de Pago */}
+          <Grid xs={12} md={4}>
+            <Card elevation={0} sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" fontWeight="bold" mb={2}>
+                  Tipo De Entrega
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Agrega productos desde el catálogo
+                <RadioGroup
+                  value={deliveryType}
+                  onChange={(e) => setDeliveryType(e.target.value)}
+                  name="delivery-type-group"
+                >
+                  <FormControlLabel value="store" control={<Radio />} label="Recoger En Tienda" />
+                  <FormControlLabel
+                    value="home"
+                    control={<Radio />}
+                    label={
+                      <Box component="span">
+                        Entrega A Domicilio
+                        <Typography variant="caption" color="text.secondary" ml={0.5}>
+                          (Costo Extra: $5.00)
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </RadioGroup>
+              </CardContent>
+            </Card>
+
+            <Card elevation={0}>
+              <CardContent>
+                <Typography variant="h6" fontWeight="bold" mb={2}>
+                  Forma De Pago
                 </Typography>
-              </Box>
-            ) : (
-              <>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Producto</TableCell>
-                        <TableCell align="center">Cant.</TableCell>
-                        <TableCell align="right">Subtotal</TableCell>
-                        <TableCell align="center">Acción</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {carrito.map((item) => (
-                        <TableRow key={item._id}>
-                          <TableCell>
-                            <Typography variant="body2" fontWeight="medium">
-                              {item.nombre}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              ${item.precioVenta?.toFixed(2)}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="center">
-                            <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
-                              <IconButton 
-                                size="small" 
-                                onClick={() => disminuirCantidad(item._id)}
-                                disabled={item.cantidad <= 1}
-                              >
-                                <Remove fontSize="small" />
-                              </IconButton>
-                              <Typography variant="body2">{item.cantidad}</Typography>
-                              <IconButton 
-                                size="small" 
-                                onClick={() => aumentarCantidad(item._id)}
-                                disabled={item.cantidad >= item.stock}
-                              >
-                                <Add fontSize="small" />
-                              </IconButton>
-                            </Box>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography variant="body2" fontWeight="bold">
-                              ${(item.precioVenta * item.cantidad).toFixed(2)}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="center">
-                            <IconButton 
-                              size="small" 
-                              color="error"
-                              onClick={() => eliminarDelCarrito(item._id)}
-                            >
-                              <Delete fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                <Box display="flex" flexDirection="column" alignItems="center" py={3}>
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    disabled={carrito.length === 0 || loading}
+                    onClick={iniciarPagoTarjetaFisica}
+                    sx={{
+                      backgroundColor: "#fbe4e7",
+                      color: "black",
+                      "&:hover": { backgroundColor: "#f9d4da" },
+                      maxWidth: 300,
+                      p: 1.5,
+                      mb: 1,
+                    }}
+                  >
+                    {loading ? <CircularProgress size={24} /> : "Pagar con Tarjeta (Terminal)"}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    disabled={carrito.length === 0 || loading}
+                    onClick={iniciarPagoEfectivo}
+                    sx={{ maxWidth: 300, p: 1.5 }}
+                  >
+                    Pagar en Efectivo
+                  </Button>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
 
-                <Divider sx={{ my: 2 }} />
-
-                <Box sx={{ p: 2, backgroundColor: "#f9f9f9", borderRadius: 1 }}>
-                  <Box display="flex" justifyContent="space-between" mb={1}>
-                    <Typography>Subtotal:</Typography>
-                    <Typography fontWeight="bold">${subtotal.toFixed(2)}</Typography>
-                  </Box>
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography variant="h6">Total:</Typography>
-                    <Typography variant="h6" fontWeight="bold" color="primary.main">
-                      ${total.toFixed(2)}
+          {/* Confirmación de Pedido */}
+          <Grid xs={12} md={4}>
+            <Card elevation={0} sx={{ height: "100%" }}>
+              <CardContent>
+                <Typography variant="h6" fontWeight="bold" mb={2}>
+                  Confirmación De Pedido
+                </Typography>
+                {carrito.length > 0 ? (
+                  <Box>
+                    <Typography variant="body2" gutterBottom>
+                      <strong>Productos:</strong> {carrito.length}
+                    </Typography>
+                    <Typography variant="body2" gutterBottom>
+                      <strong>Entrega:</strong>{" "}
+                      {deliveryType === "store" ? "Recoger en tienda" : "A domicilio"}
+                    </Typography>
+                    <Typography variant="body2" gutterBottom>
+                      <strong>Subtotal:</strong> ${subtotal.toFixed(2)}
+                    </Typography>
+                    <Typography variant="body2" gutterBottom>
+                      <strong>Envío:</strong> ${costoEnvio.toFixed(2)}
+                    </Typography>
+                    <Divider sx={{ my: 1 }} />
+                    <Typography variant="h6" gutterBottom>
+                      <strong>Total:</strong> ${total.toFixed(2)}
                     </Typography>
                   </Box>
-                </Box>
-
-                <Button
-                  variant="outlined"
-                  color="error"
-                  fullWidth
-                  onClick={vaciarCarrito}
-                  sx={{ mt: 2 }}
-                >
-                  Vaciar Carrito
-                </Button>
-              </>
-            )}
-          </Paper>
+                ) : (
+                  <Box height="calc(100% - 40px)" display="flex" alignItems="center" justifyContent="center">
+                    <Typography variant="body2" color="text.secondary">
+                      Agrega productos al carrito para ver el resumen
+                    </Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
-      </Grid>
+      </Container>
 
-      {/* Dialog de confirmación de venta */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6" fontWeight="bold">
-              Confirmar Venta
-            </Typography>
-            <IconButton onClick={() => setDialogOpen(false)}>
-              <Close />
-            </IconButton>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" mb={2}>
-            Resumen de la venta:
-          </Typography>
+      {/* Modales de Pago */}
+      <TarjetaFisicaModal
+        open={tarjetaModalOpen}
+        onClose={() => setTarjetaModalOpen(false)}
+        carrito={carrito}
+        total={total}
+      />
 
-          <Box sx={{ mb: 3 }}>
-            {carrito.map((item) => (
-              <Box key={item._id} display="flex" justifyContent="space-between" mb={1}>
-                <Typography variant="body2">
-                  {item.nombre} x {item.cantidad}
-                </Typography>
-                <Typography variant="body2" fontWeight="bold">
-                  ${(item.precioVenta * item.cantidad).toFixed(2)}
-                </Typography>
-              </Box>
-            ))}
-          </Box>
-
-          <Divider sx={{ my: 2 }} />
-
-          <Box display="flex" justifyContent="space-between" mb={3}>
-            <Typography variant="h6">Total:</Typography>
-            <Typography variant="h6" fontWeight="bold" color="primary.main">
-              ${total.toFixed(2)}
-            </Typography>
-          </Box>
-
-          <Typography variant="subtitle2" mb={1}>
-            Método de Pago:
-          </Typography>
-          <Box display="flex" gap={1} mb={2}>
-            {["Efectivo", "Tarjeta"].map((metodo) => (
-              <Button
-                key={metodo}
-                variant={metodoPago === metodo ? "contained" : "outlined"}
-                startIcon={metodo === "Efectivo" ? <Money /> : <CreditCard />}
-                onClick={() => setMetodoPago(metodo)}
-                sx={{
-                  flex: 1,
-                  backgroundColor: metodoPago === metodo ? "#e91e63" : "transparent",
-                  borderColor: "#e91e63",
-                  color: metodoPago === metodo ? "white" : "#e91e63",
-                }}
-              >
-                {metodo}
-              </Button>
-            ))}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancelar</Button>
-          <Button
-            variant="contained"
-            onClick={procesarVenta}
-            sx={{
-              backgroundColor: "#e91e63",
-              "&:hover": { backgroundColor: "#c2185b" },
-            }}
-          >
-            Confirmar Venta
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Snackbar para notificaciones */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={3000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-      >
-        <Alert 
-          severity={snackbar.severity} 
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+      <EfectivoModal
+        open={efectivoOpen}
+        onClose={() => setEfectivoOpen(false)}
+        total={total}
+        carrito={carrito}
+        metodoPago={metodoPago}
+      />
+    </>
   );
 };
 
-export default PuntoDeVenta;
+export default Carrito;

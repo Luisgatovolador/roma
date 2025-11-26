@@ -169,33 +169,25 @@ const Catalogo = () => {
     ? productos 
     : productos.filter(p => p.categoria === categoriaActiva);
 
-    const agregarAlCarrito = (producto) => {
-      const carritoActual = JSON.parse(localStorage.getItem('carrito')) || [];
-      
-      const productoExistente = carritoActual.find(item => item._id === producto._id);
-      
-      if (productoExistente) {
-        // Si ya existe, aumentar cantidad
-        const nuevoCarrito = carritoActual.map(item =>
-          item._id === producto._id 
-            ? { ...item, cantidad: item.cantidad + 1 }
-            : item
-        );
-        setCarrito(nuevoCarrito);
-        localStorage.setItem('carrito', JSON.stringify(nuevoCarrito));
-      } else {
-        // Si no existe, agregar nuevo producto
-        const nuevoProducto = {
-          ...producto,
-          cantidad: 1
-        };
-        const nuevoCarrito = [...carritoActual, nuevoProducto];
-        setCarrito(nuevoCarrito);
-        localStorage.setItem('carrito', JSON.stringify(nuevoCarrito));
-      }
-      
-      alert(`Agregado: ${producto.nombre}`);
-    };
+ const agregarAlCarrito = (producto) => {
+  const carritoActual = JSON.parse(localStorage.getItem('carrito')) || [];
+  const productoExistente = carritoActual.find(item => item._id === producto._id);
+
+  let nuevoCarrito;
+  if (productoExistente) {
+    nuevoCarrito = carritoActual.map(item =>
+      item._id === producto._id ? { ...item, cantidad: item.cantidad + 1 } : item
+    );
+  } else {
+    nuevoCarrito = [...carritoActual, { ...producto, cantidad: 1 }];
+  }
+
+  setCarrito(nuevoCarrito);
+  localStorage.setItem('carrito', JSON.stringify(nuevoCarrito));
+
+  // Emitimos un evento para que Carrito lo capture
+  window.dispatchEvent(new Event('carritoActualizado'));
+};
 
   if (loading) {
     return (

@@ -47,7 +47,7 @@ export const ventaService = {
   createVenta: async (ventaData) => {
     try {
       console.log("🔄 Creando venta:", ventaData);
-      const response = await api.post('/ventas', ventaData);
+      const response = await api.post('/ventas/', ventaData);
       console.log("✅ Venta creada:", response.data);
       return response;
     } catch (error) {
@@ -98,5 +98,21 @@ export const ventaService = {
       console.error("❌ Error en getVentasMensuales:", error);
       return { data: { total: 0 } };
     }
+  },
+ createPaymentIntent: async (amount, description) => {
+  try {
+    console.log("🔄 Creando PaymentIntent en backend...");
+    const response = await api.post('/pagos/crear-intent', {
+      amount,
+      description
+    });
+    console.log("✅ PaymentIntent creado:", response.data);
+    return response;
+  } catch (error) {
+    console.error("❌ Error en createPaymentIntent:", error);
+    throw error;
   }
+}
+
+
 };
